@@ -17,6 +17,9 @@ So, if you want a profile-specific file, `/\*/development/*/logback.xml` can be 
 NOTE: If you do not want to supply the `label` and let the server use the default label, you can supply a `useDefaultLabel` request parameter.
 Consequently, the preceding example for the `default` profile could be `/sample/default/nginx.conf?useDefaultLabel`.
 
+TIP: A Spring application that uses the Config Client can read these files as Spring `Resource` objects, for example with `@Value("configserver-file:nginx.conf")`.
+See xref:client.adoc#reading-plain-text-and-binary-files[Reading Plain Text and Binary Files].
+
 At present, Spring Cloud Config can serve plaintext for git, SVN, native backends, and AWS S3.
 The support for git, SVN, and native backends is identical. AWS S3 works a bit differently.
 The following sections show how each one works:

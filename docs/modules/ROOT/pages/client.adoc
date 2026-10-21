@@ -225,6 +225,54 @@ spring:
 
 The charset configuration property is defined as `java.nio.charset.Charset`
 
+[[reading-plain-text-and-binary-files]]
+== Reading Plain Text and Binary Files
+
+Next to the configuration of an application, the Config Server can serve xref:server/serving-plain-text.adoc[plain text] and xref:server/serving-binary-files.adoc[binary] files, such as an `nginx.conf` file or a keystore.
+The Config Client reads these files as Spring `Resource` objects, with the settings it uses to fetch the configuration:
+
+* The URIs of the Config Server, tried in turn as described in xref:client.adoc#specifying-multiple-urls-for-the-config-server[Specifying Multiple URLs for the Config Server].
+* The credentials, token, headers, TLS settings and timeouts of the client, including the OAuth2 bearer token described in xref:client.adoc#security[Security].
+* The application name, profiles and label of the client, so you only give the path of the file.
+
+To inject a file with `@Value` or to load it with a `ResourceLoader`, prefix its path with `configserver-file:`.
+By default the file is read from the plain text endpoint, so the Config Server resolves the `${...}` placeholders in it.
+To read a binary file unchanged, add `?binary` to the location, which requests the file with an `Accept` header of `application/octet-stream`:
+
+[source,java]
+----
+@Value("configserver-file:nginx.conf")
+private Resource nginxConf;
+
+@Value("configserver-file:certs/keystore.p12?binary")
+private Resource keystore;
+----
+
+You can also inject the `ConfigServerResourceFactory` bean and create the resources yourself:
+
+[source,java]
+----
+Resource nginxConf = configServerResourceFactory.getResource("nginx.conf");
+Resource keystore = configServerResourceFactory.getBinaryResource("certs/keystore.p12");
+----
+
+The file is requested from `/\{application}/\{profile}/\{label}/\{path}`, where:
+
+* `application` is `spring.cloud.config.name`, which defaults to `spring.application.name`.
+* `profile` is `spring.cloud.config.profile` or, when it is not set, the active profiles of the application.
+* `label` is `spring.cloud.config.label`.
+When it is a comma-separated list, the labels are tried in turn until one has the file.
+When it is not set, the Config Server uses its default label (see the `useDefaultLabel` parameter in xref:server/serving-plain-text.adoc[Serving Plain Text]).
+
+NOTE: The default label endpoint of the Config Server only finds files at the root of the configuration.
+To read a file in a subdirectory, such as `configserver-file:nginx/nginx.conf`, set `spring.cloud.config.label`.
+
+The file is fetched each time `getInputStream()` is called, so a bean that reads it again, for example after a refresh, gets the current version.
+When no Config Server has the file, `getInputStream()` throws a `FileNotFoundException` and `exists()` returns `false`.
+
+With the Config Data import (`spring.config.import=configserver:`), the files are fetched with the same `RestTemplate` as the configuration, including a xref:client.adoc#custom-rest-template[custom `RestTemplate`] registered in the bootstrap context.
+With xref:client.adoc#config-first-bootstrap[Config First Bootstrap], the Config Client creates a `RestTemplate` from the `spring.cloud.config.*` properties, so a `RestTemplate` set on a custom `ConfigServicePropertySourceLocator` is not used.
+
 [[security]]
 == Security
 

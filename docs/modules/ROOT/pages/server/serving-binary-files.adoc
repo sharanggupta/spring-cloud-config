@@ -3,6 +3,9 @@
 
 In order to serve binary files from the config server you will need to send an `Accept` header of `application/octet-stream`.
 
+TIP: The Config Client sends this header for locations that end with `?binary`, such as `@Value("configserver-file:keystore.p12?binary")`.
+See xref:client.adoc#reading-plain-text-and-binary-files[Reading Plain Text and Binary Files].
+
 [[spring-cloud-config-serving-plain-text-git-svn-native-backends]]
 == Git, SVN, and Native Backends
 
