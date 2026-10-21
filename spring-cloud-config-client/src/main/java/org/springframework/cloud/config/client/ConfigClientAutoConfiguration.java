@@ -16,19 +16,25 @@
 
 package org.springframework.cloud.config.client;
 
+import org.apache.commons.logging.LogFactory;
+
 import org.springframework.beans.factory.BeanFactoryUtils;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.health.autoconfigure.contributor.ConditionalOnEnabledHealthIndicator;
 import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.cloud.config.client.oauth2.ConfigClientOAuth2BootstrapConfiguration;
 import org.springframework.cloud.context.refresh.ContextRefresher;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
+import org.springframework.http.client.ClientHttpRequestInterceptor;
 
 /**
  * Expose a ConfigClientProperties just so that there is a way to inspect the properties
@@ -38,6 +44,7 @@ import org.springframework.core.env.Environment;
  *
  * @author Dave Syer
  * @author Marcos Barbero
+ * @author Sharang Gupta
  *
  */
 @Configuration(proxyBeanMethods = false)
@@ -68,6 +75,38 @@ public class ConfigClientAutoConfiguration {
 		public ConfigServerHealthIndicator clientConfigServerHealthIndicator(ConfigClientHealthProperties properties,
 				ConfigurableEnvironment environment) {
 			return new ConfigServerHealthIndicator(environment, properties);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnProperty(name = ConfigClientProperties.PREFIX + ".enabled", matchIfMissing = true)
+	protected static class ConfigServerResourceConfiguration {
+
+		/**
+		 * Used with the legacy bootstrap, or when the Config Server is not imported. The
+		 * Config Data import registers its own factory, which uses the
+		 * {@link org.springframework.web.client.RestTemplate} that loaded the
+		 * configuration.
+		 * @param properties the config client properties
+		 * @param environment the environment
+		 * @param oauth2Interceptor the OAuth2 interceptor of the legacy bootstrap, if any
+		 * @return the factory
+		 */
+		@Bean
+		@ConditionalOnMissingBean
+		public ConfigServerResourceFactory configServerResourceFactory(ConfigClientProperties properties,
+				Environment environment,
+				@Qualifier(ConfigClientOAuth2BootstrapConfiguration.OAUTH2_INTERCEPTOR_BEAN_NAME) ObjectProvider<ClientHttpRequestInterceptor> oauth2Interceptor) {
+			ConfigClientRequestTemplateFactory requestTemplateFactory = new ConfigClientRequestTemplateFactory(
+					LogFactory.getLog(ConfigServerResourceFactory.class), properties.override(environment),
+					oauth2Interceptor.stream().toList());
+			return new ConfigServerResourceFactory(requestTemplateFactory, requestTemplateFactory::create, environment);
+		}
+
+		@Bean
+		public static ConfigServerResourceProtocolResolver configServerResourceProtocolResolver() {
+			return new ConfigServerResourceProtocolResolver();
 		}
 
 	}

@@ -59,9 +59,12 @@ import static org.springframework.cloud.config.environment.Environment.denormali
  * tried in order, following its {@link ConfigClientProperties#getMultipleUriStrategy()
  * multiple URI strategy}, with its credentials, token and headers, and with the TLS
  * settings and timeouts of its {@link RestTemplate}.
+ * <p>
+ * The client auto-configuration registers a bean of this type.
  *
  * @author Sharang Gupta
  * @since 5.1.0
+ * @see ConfigServerResourceProtocolResolver
  */
 public class ConfigServerResourceFactory {
 

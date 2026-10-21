@@ -22,7 +22,11 @@ import java.util.Properties;
 import java.util.function.Supplier;
 
 import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.boot.bootstrap.BootstrapContext;
+import org.springframework.boot.bootstrap.BootstrapContextClosedEvent;
 import org.springframework.boot.bootstrap.BootstrapRegistry;
 import org.springframework.boot.bootstrap.BootstrapRegistry.InstanceSupplier;
 import org.springframework.boot.bootstrap.ConfigurableBootstrapContext;
@@ -44,6 +48,7 @@ import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.config.client.oauth2.ConfigClientOAuth2Support;
 import org.springframework.cloud.config.client.validation.ApplicationNameValidator;
 import org.springframework.cloud.context.encrypt.EncryptorFactory;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.Ordered;
 import org.springframework.core.log.LogMessage;
 import org.springframework.core.retry.RetryTemplate;
@@ -64,6 +69,8 @@ public class ConfigServerConfigDataLocationResolver
 	public static final String PREFIX = "configserver:";
 	static final boolean RSA_IS_PRESENT = ClassUtils
 		.isPresent("org.springframework.security.crypto.encrypt.RsaSecretEncryptor", null);
+
+	private static final String CONFIG_SERVER_RESOURCE_FACTORY_BEAN_NAME = "configDataConfigServerResourceFactory";
 
 	private final Log log;
 
@@ -243,6 +250,7 @@ public class ConfigServerConfigDataLocationResolver
 			.getBeanFactory()
 			.registerSingleton("configDataConfigClientProperties",
 					event.getBootstrapContext().get(ConfigClientProperties.class)));
+		bootstrapContext.addCloseListener(ConfigServerConfigDataLocationResolver::registerConfigServerResourceFactory);
 
 		bootstrapContext.registerIfAbsent(ConfigClientRequestTemplateFactory.class, context -> {
 			ConfigClientRequestTemplateFactory factory = new ConfigClientRequestTemplateFactory(log,
@@ -322,6 +330,27 @@ public class ConfigServerConfigDataLocationResolver
 		locations.add(resource);
 
 		return locations;
+	}
+
+	/**
+	 * Register a {@link ConfigServerResourceFactory} that reads files with the
+	 * {@link RestTemplate} that loaded the configuration, which carries the headers, TLS
+	 * settings, timeouts and OAuth2 interceptor of the client, or is the one that the
+	 * application registered in the bootstrap context.
+	 */
+	private static void registerConfigServerResourceFactory(BootstrapContextClosedEvent event) {
+		ConfigurableApplicationContext applicationContext = event.getApplicationContext();
+		ConfigurableListableBeanFactory beanFactory = applicationContext.getBeanFactory();
+		if (beanFactory.containsSingleton(CONFIG_SERVER_RESOURCE_FACTORY_BEAN_NAME)) {
+			return;
+		}
+		BootstrapContext bootstrapContext = event.getBootstrapContext();
+		ConfigClientRequestTemplateFactory requestTemplateFactory = new ConfigClientRequestTemplateFactory(
+				LogFactory.getLog(ConfigServerResourceFactory.class),
+				bootstrapContext.get(ConfigClientProperties.class));
+		beanFactory.registerSingleton(CONFIG_SERVER_RESOURCE_FACTORY_BEAN_NAME,
+				new ConfigServerResourceFactory(requestTemplateFactory, () -> bootstrapContext.get(RestTemplate.class),
+						applicationContext.getEnvironment()));
 	}
 
 	public static class PropertyResolver {

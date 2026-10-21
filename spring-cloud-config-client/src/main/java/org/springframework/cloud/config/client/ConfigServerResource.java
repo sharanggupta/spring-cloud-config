@@ -33,11 +33,14 @@ import org.springframework.util.StringUtils;
  * endpoint, which returns it unchanged.
  * <p>
  * The file is fetched every time {@link #getInputStream()} is called, with the settings
- * of the config client. Create instances with a {@link ConfigServerResourceFactory}.
+ * of the config client. Create instances with a {@link ConfigServerResourceFactory}, or
+ * through a {@link org.springframework.core.io.ResourceLoader} with the
+ * {@value ConfigServerResourceProtocolResolver#PREFIX} prefix.
  *
  * @author Sharang Gupta
  * @since 5.1.0
  * @see ConfigServerResourceFactory
+ * @see ConfigServerResourceProtocolResolver
  */
 public class ConfigServerResource extends AbstractResource {
 
