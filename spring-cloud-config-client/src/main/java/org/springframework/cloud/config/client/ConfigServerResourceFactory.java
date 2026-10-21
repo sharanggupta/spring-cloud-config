@@ -26,7 +26,6 @@ import java.util.stream.IntStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import org.springframework.beans.BeanUtils;
 import org.springframework.cloud.config.client.ConfigClientProperties.Credentials;
 import org.springframework.cloud.config.client.ConfigClientProperties.MultipleUriStrategy;
 import org.springframework.core.env.Environment;
@@ -154,7 +153,7 @@ public class ConfigServerResourceFactory {
 					return (response.getBody() != null) ? response.getBody() : new byte[0];
 				}
 				if (hasNextUri && tryNextUriOnAnyError()) {
-					logTryingNextUri(credentials, "Status : " + response.getStatusCode());
+					logTryingNextUri("Status : " + response.getStatusCode());
 					continue;
 				}
 				throw new IOException(resource.getDescription() + " could not be read, the Config Server answered "
@@ -162,7 +161,7 @@ public class ConfigServerResourceFactory {
 			}
 			catch (HttpClientErrorException | HttpServerErrorException ex) {
 				if (hasNextUri && tryNextUriOnAnyError()) {
-					logTryingNextUri(credentials, "Error : " + ex.getMessage());
+					logTryingNextUri("Status : " + ex.getStatusCode());
 					continue;
 				}
 				if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
@@ -172,7 +171,7 @@ public class ConfigServerResourceFactory {
 			}
 			catch (ResourceAccessException ex) {
 				if (hasNextUri) {
-					logTryingNextUri(credentials, "Error : " + ex.getMessage());
+					logTryingNextUri("Error : " + ex.getMostSpecificCause().getMessage());
 					continue;
 				}
 				throw new IOException(resource.getDescription() + " could not be read", ex);
@@ -189,8 +188,7 @@ public class ConfigServerResourceFactory {
 	 * because discovery updates the URIs and credentials while the application runs.
 	 */
 	private List<Credentials> getServers() {
-		ConfigClientProperties properties = new ConfigClientProperties();
-		BeanUtils.copyProperties(getProperties(), properties);
+		ConfigClientProperties properties = getProperties();
 		return IntStream.range(0, properties.getUri().length).mapToObj(properties::getCredentials).toList();
 	}
 
@@ -237,9 +235,8 @@ public class ConfigServerResourceFactory {
 		return headers;
 	}
 
-	private void logTryingNextUri(Credentials credentials, String reason) {
-		log.info("Failed to fetch a file from the config server at : " + credentials.getUri()
-				+ ". Will try the next url if available. " + reason);
+	private void logTryingNextUri(String reason) {
+		log.info("Failed to fetch a file from a config server. Will try the next url if available. " + reason);
 	}
 
 	private boolean tryNextUriOnAnyError() {
