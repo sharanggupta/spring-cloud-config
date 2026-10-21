@@ -29,11 +29,13 @@ import org.springframework.core.io.Resource;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.springframework.http.HttpHeaders.ACCEPT;
 import static org.springframework.http.HttpHeaders.ACCEPT_CHARSET;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
@@ -267,6 +269,39 @@ class ConfigServerResourceTests {
 
 		assertThat(factory.getResource("missing.txt").exists()).isFalse();
 		this.server.verify();
+	}
+
+	@Test
+	void wrapsOtherClientErrorsInIOException() {
+		ConfigServerResourceFactory factory = createFactory();
+		this.server.expect(requestTo("http://one:8888/app/dev/main/nginx.conf")).andRespond(request -> {
+			throw new RestClientException("Unexpected response");
+		});
+
+		Resource resource = factory.getResource("nginx.conf");
+
+		assertThatExceptionOfType(IOException.class).isThrownBy(resource::getInputStream)
+			.withCauseInstanceOf(RestClientException.class);
+		this.server.verify();
+	}
+
+	@Test
+	void rejectsPathsOutsideTheConfiguration() {
+		ConfigServerResourceFactory factory = createFactory();
+		ConfigServerResource resource = factory.getResource("nginx/nginx.conf");
+
+		assertThatIllegalArgumentException().isThrownBy(() -> factory.getResource("../actuator/env"));
+		assertThatIllegalArgumentException().isThrownBy(() -> factory.getBinaryResource("nginx/../../keystore.p12"));
+		assertThatIllegalArgumentException().isThrownBy(() -> resource.createRelative("../../actuator/env"));
+	}
+
+	@Test
+	void normalizesPathsInsideTheConfiguration() throws IOException {
+		ConfigServerResourceFactory factory = createFactory();
+
+		Resource resource = factory.getResource("nginx/nginx.conf").createRelative("../sites/./default.conf");
+
+		assertThat(resource).isEqualTo(factory.getResource("sites/default.conf"));
 	}
 
 	@Test

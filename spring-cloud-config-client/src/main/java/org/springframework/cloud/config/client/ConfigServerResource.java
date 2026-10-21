@@ -54,9 +54,19 @@ public class ConfigServerResource extends AbstractResource {
 		Assert.notNull(factory, "ConfigServerResourceFactory must not be null");
 		Assert.hasText(path, "Path must not be empty");
 		this.factory = factory;
-		this.path = StringUtils.trimLeadingCharacter(path, '/');
+		this.path = StringUtils.cleanPath(StringUtils.trimLeadingCharacter(path, '/'));
 		this.binary = binary;
 		Assert.hasText(this.path, () -> "Path must name a file: " + path);
+		Assert.isTrue(!isOutsideConfiguration(this.path),
+				() -> "Path must not leave the configuration of the application: " + path);
+	}
+
+	/**
+	 * A normalized path that starts with {@code ..} would make the server or a proxy
+	 * route the request, and the credentials of the client, to another endpoint.
+	 */
+	private static boolean isOutsideConfiguration(String normalizedPath) {
+		return normalizedPath.equals("..") || normalizedPath.startsWith("../");
 	}
 
 	/**

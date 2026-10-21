@@ -21,10 +21,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import org.springframework.beans.BeanUtils;
 import org.springframework.cloud.config.client.ConfigClientProperties.Credentials;
 import org.springframework.cloud.config.client.ConfigClientProperties.MultipleUriStrategy;
 import org.springframework.core.env.Environment;
@@ -40,6 +42,7 @@ import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -141,11 +144,10 @@ public class ConfigServerResourceFactory {
 	 * is not found with this label.
 	 */
 	private byte[] readWithLabel(ConfigServerResource resource, String label) throws IOException {
-		ConfigClientProperties properties = getProperties();
-		int numberOfUris = properties.getUri().length;
-		for (int i = 0; i < numberOfUris; i++) {
-			Credentials credentials = properties.getCredentials(i);
-			boolean hasNextUri = i < numberOfUris - 1;
+		List<Credentials> servers = getServers();
+		for (int i = 0; i < servers.size(); i++) {
+			Credentials credentials = servers.get(i);
+			boolean hasNextUri = i < servers.size() - 1;
 			try {
 				ResponseEntity<byte[]> response = exchange(credentials, resource, label);
 				if (response.getStatusCode().is2xxSuccessful()) {
@@ -175,8 +177,21 @@ public class ConfigServerResourceFactory {
 				}
 				throw new IOException(resource.getDescription() + " could not be read", ex);
 			}
+			catch (RestClientException ex) {
+				throw new IOException(resource.getDescription() + " could not be read", ex);
+			}
 		}
 		return null;
+	}
+
+	/**
+	 * Return the URI and credentials of each Config Server from a copy of the properties,
+	 * because discovery updates the URIs and credentials while the application runs.
+	 */
+	private List<Credentials> getServers() {
+		ConfigClientProperties properties = new ConfigClientProperties();
+		BeanUtils.copyProperties(getProperties(), properties);
+		return IntStream.range(0, properties.getUri().length).mapToObj(properties::getCredentials).toList();
 	}
 
 	private ResponseEntity<byte[]> exchange(Credentials credentials, ConfigServerResource resource, String label) {
